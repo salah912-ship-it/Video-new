@@ -1,0 +1,5 @@
+# 222 MB Google Street View screen recording: reference only, exceeds GitHub's 100 MB limit.
+# Source: Google Drive file 1e_UsGdoCZLrAOayyJB9KWqtHhvsywkSt (see 00_assets/streetview/SOURCE.md)
+00_assets/streetview/*.mp4
+08_render/render.log
+__pycache__/
