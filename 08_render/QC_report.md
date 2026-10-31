@@ -1,30 +1,31 @@
-# QC report: PUNTOCOM_TheWayToUs_1080x1920_30fps.mp4
+# QC report: Egyptian Arabic edition
 
-Verified on the rendered file with `tools/qc_check.sh` (ffprobe, blackdetect, freezedetect, EBU R128).
+Verified on the rendered files with `tools/qc_check.sh` (ffprobe, blackdetect, freezedetect, EBU R128), plus visual inspection
+of full-resolution frames (`02_storyboard/storyboard_frames.jpg` comes from the silent master).
 
-| Check | Result |
+| Check | `…_SILENT_…mp4` | `…_MUSIC_SFX_noVO_…mp4` |
+|---|---|---|
+| Codec | H.264 High, yuv420p, faststart | same |
+| Resolution / aspect | 1080×1920, 9:16 | same |
+| Frame rate / length | 30 fps, 1050 frames, 35.000 s | same |
+| Audio | **none (no audio stream)** ✅ | AAC 48 kHz stereo, 35.000 s, **no narration** ✅ |
+| Loudness | — | −20.2 LUFS integrated, peak −6.0 dBFS (room for the owner's voice) |
+| Black frames (≥0.1 s) | none ✅ | none ✅ |
+| Frozen frames (≥0.6 s) | none ✅ | none ✅ |
+| Size | 68.8 MB | 69.9 MB |
+
+| Content check | Result |
 |---|---|
-| Container / codec | MP4, H.264 High, yuv420p, `+faststart` ✅ |
-| Resolution / aspect | 1080×1920, 9:16 ✅ |
-| Frame rate / length | 30 fps, **1050 frames, 35.000 s** ✅ |
-| Audio | AAC-LC 48 kHz stereo, 35.000 s, in sync with the picture cue sheet ✅ |
-| Loudness | −13.0 LUFS integrated, LRA 10.4 LU, true peak −0.3 dBFS (social / mobile target) ✅ |
-| Black frames (≥0.1 s, pix_th 0.06) | **none** ✅. Two 4-frame dips found in v1 (7.2 s, 21.9 s) were removed in v2 |
-| Frozen frames (≥0.6 s) | none ✅ |
-| File size | 70.8 MB (CRF 19) |
-| Correct metro station | CIMIANO, M2 (real photos) ✅ |
-| Correct destination | Via Padova 167, Milano: shown in S04, S05 and S06 ✅ |
-| Storefront appearance | original photo, only scaled and translated. No graphics over the signs, door or windows. Arabic and Italian signage untouched ✅ |
-| Logo integrity | extracted original layers, no redraw, recolour or retype (`01_analysis/logo_alpha_check.jpg`) ✅ |
-| Italian spelling | "Sei alla fermata Cimiano della linea M2?", "Raggiungerci è semplicissimo!", "Segui il percorso verso Via Padova…", "…e troverai Puntocom al numero 167.", "CAF, Patronato e tanti servizi per te.", "Via Padova 167 – Milano", "Siamo qui per aiutarti!", "CONTABILITÀ" ✅ |
-| Arabic text | none added ✅ |
-| Google Street View imagery / UI in picture | none ✅ |
-| Invented distances / times / street names | none ✅. The map is labelled "Schema indicativo · non in scala" |
-| AI signage errors | n/a. No AI-generated footage is in this master |
+| Arabic shaping and RTL | ✅ HarfBuzz/FriBiDi via libraqm (the renderer refuses to run without it). Letters are joined, mixed Arabic/Latin order is correct, the shadda (كمّل) renders, and "؟" is used for the Arabic question. |
+| Fonts | ✅ Cairo Bold for headlines. IBM Plex Sans Arabic for supporting text and chips. Inter only for Latin place labels. |
+| Scene texts | ✅ exactly as briefed: نازل محطة Cimiano M2؟ / تعالى نوصلك لمكتبنا / الطريق أسهل مما تتخيل! / وجهتك Puntocom / وصلت! إحنا في انتظارك / PUNTOCOM CAF PATRONATO (official logo) · Via Padova 167 – Milano · مستنيينك! |
+| Italian names unchanged | ✅ Cimiano M2, Via Padova 167, Milano, PUNTOCOM CAF PATRONATO |
+| No Italian narration or Italian promo text | ✅ |
+| No synthetic or AI voice, no fake VO file | ✅ (`AUDIO/VOICEOVER_OWNER.wav` intentionally absent) |
+| Storefront integrity | ✅ original photo, only scaled and translated. Text is in the plate bands only. |
+| Logo integrity | ✅ original extracted layers |
+| No Street View imagery or UI | ✅ |
+| No invented distances or street names | ✅. The map is labelled "رسم توضيحي · مش بمقياس رسم" |
 
-## Known limitations (not defects of the file)
-1. **No voiceover in this master.** ElevenLabs refused the generation (busy free tier). The subtitles carry the script. See `07_audio/README.md` to add it.
-2. **S02–S03 is a stylised procedural 3D street, not photoreal AI footage.** No AI video engine was available. The prompts and AE slots are ready.
-3. **The S04 map is schematic.** Map data services were blocked. See `01_analysis/route_analysis.md` §3.
-
-Storyboard frames from this file: `02_storyboard/storyboard_frames.jpg`.
+Not verifiable here: the `.aep` itself. After Effects is not installed, so `build_puntocom_project.jsx` was syntax-checked only.
+Run it once in AE (see README) to produce and check the project.

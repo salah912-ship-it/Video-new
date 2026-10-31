@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""PUNTOCOM - THE WAY TO US :: programmatic master render (1080x1920, 30 fps, 35 s).
+"""PUNTOCOM - THE WAY TO US :: Egyptian-Arabic edition, programmatic render (1080x1920, 30 fps, 35 s).
+
+No narration: the picture is voiceover-ready for the owner's own Egyptian Arabic recording.
+Arabic text is shaped with HarfBuzz/FriBiDi (Pillow + libraqm), RTL, Cairo Bold + IBM Plex Sans Arabic.
 
 This is the deliverable render built without After Effects (not installed in the
 production environment). It mirrors the storyboard / AE precomp structure 1:1:
@@ -36,6 +39,20 @@ def font(name, size):
     if k not in _fc:
         _fc[k] = ImageFont.truetype(FD + name + '.otf', int(size))
     return _fc[k]
+
+AFD = os.path.join(ROOT, 'fonts') + '/'
+from PIL import features as _feat
+assert _feat.check('raqm'), 'libraqm is required for correct Arabic shaping/RTL'
+def afont(name, size):
+    """Arabic fonts: Cairo-Bold (headlines), IBMPlexSansArabic-* (supporting text). RAQM layout = HarfBuzz shaping."""
+    k = ('ar', name, int(size))
+    if k not in _fc:
+        _fc[k] = ImageFont.truetype(AFD + name + '.ttf', int(size), layout_engine=ImageFont.Layout.RAQM)
+    return _fc[k]
+def ar(d, xy, s, f, fill, anchor='mm'):
+    d.text(xy, s, font=f, fill=fill, anchor=anchor, direction='rtl', language='ar')
+def ar_len(s, f):
+    return f.getlength(s, direction='rtl', language='ar')
 
 # ---------------------------------------------------------------- easing
 def clamp(x, a=0.0, b=1.0): return max(a, min(b, x))
@@ -125,20 +142,28 @@ def fade(img, k, col=(0, 0, 0)):
     return Image.blend(Image.new('RGB', img.size, col), img, clamp(k))
 
 # ---------------------------------------------------------------- shared UI
-def caption(ov, t, a, b, text, base_y=1640):
-    """Lower-third subtitle (mirrors the Italian VO; keeps the ad readable muted)."""
-    k = win(t, a, b, 0.3, 0.3)
+def headline(ov, t, a, b, text, y=1600, size=84, col=WHITE, plate=True):
+    """Scene headline in Egyptian Arabic. Revealed right-to-left (reading direction)."""
+    k = win(t, a, b, 0.5, 0.35)
     if k <= 0: return
-    d = ImageDraw.Draw(ov)
-    f = font('Inter-SemiBold', 44)
-    lines = wrap(text, f, 900)
-    y0 = base_y - (len(lines) - 1) * 30 + (1 - e_out(k)) * 24
-    for i, ln in enumerate(lines):
-        y = y0 + i * 60
-        tw = f.getlength(ln)
-        d.rounded_rectangle((W / 2 - tw / 2 - 22, y - 34, W / 2 + tw / 2 + 22, y + 30), 14,
-                            fill=(17, 17, 17, int(170 * k)))
-        d.text((W / 2, y), ln, font=f, fill=(255, 255, 255, int(255 * k)), anchor='mm')
+    ke = e_out(seg(t, a, a + 0.8))
+    f = afont('Cairo-Bold', size)
+    tw = ar_len(text, f)
+    L = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    yy = y + (1 - ke) * 26
+    if plate:
+        d.rounded_rectangle((W / 2 - tw / 2 - 42, yy - size * 0.78, W / 2 + tw / 2 + 42, yy + size * 0.78), 22,
+                            fill=(17, 17, 17, 175))
+    ar(d, (W / 2, yy), text, f, col + (255,))
+    lw = (tw + 84) * e_out(seg(t, a + 0.25, a + 1.0))
+    d.rectangle((W / 2 + tw / 2 + 42 - lw, yy + size * 0.78 - 6, W / 2 + tw / 2 + 42, yy + size * 0.78), fill=ORANGE + (255,))
+    # RTL wipe: soft edge travels from the right edge of the text to the left
+    edge = lerp(W / 2 + tw / 2 + 60, W / 2 - tw / 2 - 120, e_out(seg(t, a, a + 0.75)))
+    xs = np.arange(W, dtype=np.float32)
+    ramp_ = np.clip((xs - edge) / 60.0, 0, 1) * k
+    al = np.asarray(L.getchannel('A')).astype(np.float32) * ramp_[None, :]
+    L.putalpha(Image.fromarray(al.astype(np.uint8)))
+    ov.alpha_composite(L)
 
 def wrap(text, f, maxw):
     words, lines, cur = text.split(), [], ''
@@ -152,39 +177,41 @@ def wrap(text, f, maxw):
     return lines
 
 def step_card(ov, t, a, b, num, title, sub=None, y=250):
+    """Wayfinding card, RTL layout: number badge on the right, slides in from the right."""
     k = win(t, a, b, 0.45, 0.35)
     if k <= 0: return
     ke = e_expo(seg(t, a, a + 0.6))
     d = ImageDraw.Draw(ov)
-    ft, fs = font('Inter-Bold', 46), font('Inter-Medium', 32)
-    tw = max(ft.getlength(title), fs.getlength(sub) if sub else 0)
+    ft, fs = afont('Cairo-Bold', 50), afont('IBMPlexSansArabic-Medium', 34)
+    tw = max(ar_len(title, ft), ar_len(sub, fs) if sub else 0)
     w_ = tw + 190
-    x0 = 70 - (1 - ke) * 80
-    hh = 150 if sub else 110
+    x1 = W - 70 + (1 - ke) * 80
+    hh = 160 if sub else 115
     al = int(255 * k)
-    d.rounded_rectangle((x0, y, x0 + w_ * (0.3 + 0.7 * ke), y + hh), 26, fill=(17, 17, 17, int(215 * k)))
-    d.rounded_rectangle((x0, y, x0 + 10, y + hh), 5, fill=ORANGE + (al,))
-    cx, cy = x0 + 75, y + hh / 2
+    d.rounded_rectangle((x1 - w_ * (0.3 + 0.7 * ke), y, x1, y + hh), 26, fill=(17, 17, 17, int(215 * k)))
+    d.rounded_rectangle((x1 - 10, y, x1, y + hh), 5, fill=ORANGE + (al,))
+    cx, cy = x1 - 75, y + hh / 2
     d.ellipse((cx - 34, cy - 34, cx + 34, cy + 34), fill=ORANGE + (al,))
-    d.text((cx, cy + 1), str(num), font=font('Inter-Black', 38), fill=(17, 17, 17, al), anchor='mm')
+    d.text((cx, cy + 1), '١٢٣'[num - 1], font=afont('Cairo-Bold', 42), fill=(17, 17, 17, al), anchor='mm')
     if ke > 0.35:
         ka = int(al * seg(ke, 0.35, 1))
-        d.text((x0 + 135, y + (45 if sub else hh / 2)), title, font=ft, fill=(255, 255, 255, ka), anchor='lm')
+        ar(d, (x1 - 135, y + (50 if sub else hh / 2)), title, ft, (255, 255, 255, ka), anchor='rm')
         if sub:
-            d.text((x0 + 135, y + 105), sub, font=fs, fill=(255, 200, 150, ka), anchor='lm')
+            ar(d, (x1 - 135, y + 112), sub, fs, (255, 200, 150, ka), anchor='rm')
 
 def progress_rail(ov, t):
-    """Thin journey progress bar (orange) at the very top, 0..29 s."""
+    """Thin journey progress rail, filling right-to-left (Arabic reading direction), 0..29 s."""
     if t > 29.2: return
     k = win(t, 0.4, 29.2, 0.5, 0.4)
     d = ImageDraw.Draw(ov)
     p = seg(t, 0.4, 28.6)
+    x = W - 60 - (W - 120) * p
     d.rectangle((60, 92, W - 60, 96), fill=(255, 255, 255, int(60 * k)))
-    d.rectangle((60, 92, 60 + (W - 120) * p, 96), fill=ORANGE + (int(255 * k),))
-    d.ellipse((60 + (W - 120) * p - 9, 85, 60 + (W - 120) * p + 9, 103), fill=ORANGE + (int(255 * k),))
+    d.rectangle((x, 92, W - 60, 96), fill=ORANGE + (int(255 * k),))
+    d.ellipse((x - 9, 85, x + 9, 103), fill=ORANGE + (int(255 * k),))
     f = font('Inter-SemiBold', 24)
-    d.text((60, 125), 'CIMIANO M2', font=f, fill=(255, 255, 255, int(200 * k)), anchor='lm')
-    d.text((W - 60, 125), 'VIA PADOVA 167', font=f, fill=(255, 255, 255, int(200 * k)), anchor='rm')
+    d.text((W - 60, 125), 'Cimiano M2', font=f, fill=(255, 255, 255, int(200 * k)), anchor='rm')
+    d.text((60, 125), 'Via Padova 167', font=f, fill=(255, 255, 255, int(200 * k)), anchor='lm')
 
 # ================================================================ S01 CIMIANO
 def s01(t):
@@ -214,22 +241,8 @@ def s01(t):
         sc = np.zeros((H, W, 4), np.uint8)
         sc[..., 3] = (np.clip(1 - np.linspace(0, 1, H) / 0.42, 0, 1) ** 1.5 * 190 * ks).astype(np.uint8)[:, None]
         ov.alpha_composite(Image.fromarray(sc, 'RGBA'))
-    # title: CIMIANO M2
-    k = win(t, 2.5, 5.1, 0.6, 0.3)
-    if k > 0:
-        d = ImageDraw.Draw(ov)
-        ke = e_expo(seg(t, 2.5, 3.3))
-        y = 420 + (1 - ke) * 40
-        text_tracked(d, (W / 2, y - 95), 'PARTENZA', font('Inter-Bold', 30), ORANGE + (int(255 * k),), 14)
-        f = font('InterDisplay-Black', 150)
-        tw = f.getlength('CIMIANO')
-        d.text((W / 2 - 70, y), 'CIMIANO', font=f, fill=(255, 255, 255, int(255 * k)), anchor='mm')
-        bx = W / 2 - 70 + tw / 2 + 30
-        d.rounded_rectangle((bx, y - 62, bx + 130, y + 62), 22, fill=M2GREEN + (int(255 * k),))
-        d.text((bx + 65, y + 2), 'M2', font=font('InterDisplay-Black', 76), fill=(255, 255, 255, int(255 * k)), anchor='mm')
-        lw = (tw + 160) * e_out(seg(t, 2.9, 3.7))
-        d.rectangle((W / 2 - lw / 2, y + 90, W / 2 + lw / 2, y + 96), fill=ORANGE + (int(255 * k),))
-    caption(ov, t, 0.6, 4.95, 'Sei alla fermata Cimiano della linea M2?')
+    # Scene 1 headline
+    headline(ov, t, 2.4, 5.0, 'نازل محطة Cimiano M2؟', y=430, size=82, plate=False)
     progress_rail(ov, t)
     return overlay_rgba(im, ov)
 
@@ -476,11 +489,11 @@ def s03(t):
         im = Image.blend(im, im.filter(ImageFilter.GaussianBlur(14)), e_in(k))
         im = fade(im, 1 - e_in(k) * 0.85, (10, 10, 12))
     ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    step_card(ov, t, 7.6, 10.3, 1, 'Esci dalla metro', 'Cimiano · Linea M2', y=230)
-    step_card(ov, t, 10.5, 13.4, 2, 'Strade residenziali', 'Zona 30 · lungo il parco', y=230)
-    step_card(ov, t, 13.6, 16.6, 3, 'Al semaforo: Via Padova', 'Prosegui fino al numero 167', y=230)
-    caption(ov, t, 5.25, 9.8, 'Raggiungerci è semplicissimo!')
-    caption(ov, t, 10.2, 16.6, 'Segui il percorso verso Via Padova…')
+    step_card(ov, t, 7.6, 10.3, 1, 'اطلع من المترو', 'محطة Cimiano M2', y=230)
+    step_card(ov, t, 10.5, 13.4, 2, 'شوارع سكنية هادية', 'Zona 30 · جنب الجنينة', y=230)
+    step_card(ov, t, 13.6, 16.6, 3, 'عند الإشارة: Via Padova', 'كمّل لحد رقم 167', y=230)
+    headline(ov, t, 5.3, 9.8, 'تعالى نوصلك لمكتبنا')
+    headline(ov, t, 10.5, 16.5, 'الطريق أسهل مما تتخيل!')
     progress_rail(ov, t)
     return overlay_rgba(im, ov)
 
@@ -603,10 +616,10 @@ def s04(t):
         rr = 40 + 90 * pulse
         d.ellipse((c[0] - rr, c[1] - rr * 0.6, c[0] + rr, c[1] + rr * 0.6), outline=ORANGE + (int(200 * (1 - pulse) * kd),), width=5)
         pin(d, c, 1.15 * kd)
-        lab(d, (c[0] + 70, c[1] - 110), 'PUNTOCOM', 'VIA PADOVA 167', kd, ORANGE)
-    d.text((W / 2, 1820), 'Schema indicativo · non in scala', font=font('Inter-Medium', 24),
-           fill=(255, 255, 255, int(110 * win(t, 17.2, 22, 0.5, 0.4))), anchor='mm')
-    caption(ov, t, 17.3, 21.9, '…e troverai Puntocom al numero 167.')
+        lab(d, (c[0] + 70, c[1] - 110), 'PUNTOCOM', 'Via Padova 167', kd, ORANGE)
+    ar(d, (W / 2, 1830), 'رسم توضيحي · مش بمقياس رسم', afont('IBMPlexSansArabic-Regular', 26),
+       (255, 255, 255, int(120 * win(t, 17.2, 22, 0.5, 0.4))))
+    headline(ov, t, 17.4, 21.9, 'وجهتك Puntocom')
     progress_rail(ov, t)
     im = overlay_rgba(im, ov)
     im = fade(im, seg(t, 16.8, 17.3) * 0.85 + 0.15, (10, 10, 12))
@@ -672,19 +685,19 @@ def s05(t):
                 x, y = sp[-1]; dd.ellipse((x - r, y - r * 0.45, x + r, y + r * 0.45), outline=ORANGE, width=6)
         im = add(im, glow_layer(dr, 16, 1.1))
     ov = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(ov)
-    kd = e_expo(seg(t, 24.6, 25.4)) * (1 - seg(t, 28.4, 28.9))
-    if kd > 0:
-        x, y = sp[-1]
-        lab(d, (70, 205), 'SEI ARRIVATO', 'PUNTOCOM · VIA PADOVA 167', kd, ORANGE)
-    # service chips (verbatim from the real shop windows)
-    for i, (txt, a) in enumerate((('CAF', 25.9), ('PATRONATO', 26.25), ('IMMIGRAZIONE', 26.6), ('CONTABILITÀ', 26.95))):
+    headline(ov, t, 24.5, 28.6, 'وصلت! إحنا في انتظارك', y=200, size=66)
+    # service chips: wording taken from the shop's own Arabic window sign, ordered right-to-left
+    chips = (('خدمات الكاف', 25.9), ('الباتروناتو', 26.25), ('الهجرة والجنسية', 26.6), ('المحاسبة', 26.95))
+    fch = afont('IBMPlexSansArabic-SemiBold', 30)
+    widths = [ar_len(c, fch) + 48 for c, _ in chips]
+    gap = 18; x = W / 2 + (sum(widths) + gap * 3) / 2
+    for (txt, a), wdt in zip(chips, widths):
         kk = e_expo(seg(t, a, a + 0.5)) * (1 - seg(t, 28.4, 28.9))
+        cxx = x - wdt / 2; x -= wdt + gap
         if kk <= 0: continue
-        f = font('Inter-Bold', 27); tw = f.getlength(txt)
-        cxx = [150, 375, 640, 905][i]; yy = 1825 + (1 - kk) * 20
-        d.rounded_rectangle((cxx - tw / 2 - 20, yy - 26, cxx + tw / 2 + 20, yy + 26), 26, fill=(17, 17, 17, int(210 * kk)), outline=ORANGE + (int(255 * kk),), width=3)
-        d.text((cxx, yy), txt, font=f, fill=(255, 255, 255, int(255 * kk)), anchor='mm')
-    caption(ov, t, 23.0, 28.6, 'CAF, Patronato e tanti servizi per te.', base_y=1715)
+        yy = 1800 + (1 - kk) * 20
+        d.rounded_rectangle((cxx - wdt / 2, yy - 30, cxx + wdt / 2, yy + 30), 30, fill=(17, 17, 17, int(210 * kk)), outline=ORANGE + (int(255 * kk),), width=3)
+        ar(d, (cxx, yy - 2), txt, fch, (255, 255, 255, int(255 * kk)))
     progress_rail(ov, t)
     im = overlay_rgba(im, ov)
     # entry from map: orange iris opening from the pin position
@@ -757,8 +770,8 @@ def s06(t):
         text_tracked(d, (W / 2, y), 'Via Padova 167 – Milano', font('Inter-Medium', 46), (255, 255, 255, int(255 * ka)), 3)
     kl = e_out(seg(t, 32.8, 33.7))
     if kl > 0:
-        y = 1405 + (1 - kl) * 20
-        d.text((W / 2, y), 'Siamo qui per aiutarti!', font=font('InterDisplay-SemiBold', 62), fill=GOLD + (int(255 * kl),), anchor='mm')
+        y = 1420 + (1 - kl) * 20
+        ar(d, (W / 2, y + 6), 'مستنيينك!', afont('Cairo-Bold', 92), GOLD + (int(255 * kl),))
     im = overlay_rgba(im, ov)
     im = grade(im, t, 0.5, grain=True)
     im = fade(im, 1 - seg(t, 34.55, 35.0))
@@ -775,12 +788,11 @@ def frame(i):
         if k > 0:
             dd = ImageDraw.Draw(ov)
             yy = 1360 - e_out(seg(t, 5.3, 6.0)) * 30
-            text_tracked(dd, (W / 2, yy), 'ESCI IN SUPERFICIE', font('Inter-Black', 52), (255, 255, 255, int(255 * k)), 8)
             for j in range(3):                                   # rising chevrons
                 ph = ((t * 1.6) + j / 3) % 1
                 cy = yy - 90 - ph * 160; a = int(255 * k * math.sin(ph * math.pi))
                 dd.line([(W / 2 - 46, cy + 30), (W / 2, cy - 10), (W / 2 + 46, cy + 30)], fill=ORANGE + (a,), width=12)
-        caption(ov, t, 5.25, 9.8, 'Raggiungerci è semplicissimo!')
+        headline(ov, t, 5.3, 9.8, 'تعالى نوصلك لمكتبنا')
         progress_rail(ov, t)
         im = overlay_rgba(im, ov)
     elif t < 16.95: im = s03(t)

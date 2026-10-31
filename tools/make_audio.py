@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Original score + sound design for PUNTOCOM - THE WAY TO US (35 s, 48 kHz stereo).
+"""Original score + sound design for PUNTOCOM - THE WAY TO US, Egyptian-Arabic edition (35 s, 48 kHz stereo).
+
+VOICEOVER-READY: no narration is generated here (the owner records his own Egyptian Arabic VO).
+Music and SFX are kept at a moderate level and away from harsh mid/high transients so speech sits on top.
 
 Everything is synthesised here (no third-party music/SFX), so the audio is
 royalty-free and fully reproducible. Stems are written to 07_audio/stems/, the
@@ -26,7 +29,8 @@ BEAT = 60 / BPM
 # transitions (s) shared with the picture edit
 CUTS = dict(whip=1.95, card=5.0, emerge=7.25, map=16.9, store=21.95, reveal=28.9)
 PINGS = [7.6, 10.5, 13.6, 17.15, 20.5, 24.6]
-VO_CUES = [0.6, 5.3, 10.3, 23.0, 30.6]   # VO line starts (s)
+# Suggested VO windows (s) = the on-screen headline windows; purely a guide for the owner's recording.
+VO_WINDOWS = [(0.5, 5.0), (5.3, 9.8), (10.5, 16.5), (17.4, 21.9), (24.5, 28.6), (29.6, 34.6)]
 
 def lp(x, f, o=2): return sosfilt(butter(o, f / (SR / 2), 'low', output='sos'), x)
 def hp(x, f, o=2): return sosfilt(butter(o, f / (SR / 2), 'high', output='sos'), x)
@@ -75,8 +79,8 @@ def pluck_arp():
         f = note(m)
         L = int(0.5 * SR); i0 = int(t * SR)
         tt = np.arange(L) / SR
-        s = (np.sin(2 * np.pi * f * tt) + 0.35 * np.sin(4 * np.pi * f * tt) + 0.1 * np.sin(6 * np.pi * f * tt)) * np.exp(-tt * 9)
-        i1 = min(N, i0 + L); out[i0:i1] += s[: i1 - i0] * 0.07
+        s = (np.sin(2 * np.pi * f * tt) + 0.25 * np.sin(4 * np.pi * f * tt)) * np.exp(-tt * 11)
+        i1 = min(N, i0 + L); out[i0:i1] += s[: i1 - i0] * 0.045
         t += step; i += 1
     out *= ramp(5.0, 7.5)
     l = out + 0.35 * np.roll(out, int(SR * BEAT * 0.75)); r = out + 0.35 * np.roll(out, int(SR * BEAT * 0.5))
@@ -126,7 +130,7 @@ def metro_amb():
     hiss = bp(rng.normal(0, 1, N), 800, 3500) * 0.012
     # distant train pass swell
     sw = np.exp(-((T - 2.6) / 1.4) ** 2)
-    train = bp(rng.normal(0, 1, N), 120, 900) * sw * 0.12
+    train = bp(rng.normal(0, 1, N), 120, 600) * sw * 0.06
     g = np.clip(T / 0.4, 0, 1) * (1 - ramp(6.2, 7.6))
     m = (rumble * 0.25 + hiss + train) * g
     return np.stack([m, np.roll(m, 480)], 1)
@@ -153,18 +157,18 @@ def whoosh(t0, length=0.9, lo=300, hi=6000, gain=0.35, rev=False):
     out[i0:i1, 0] = s[: i1 - i0] * (1 - pan); out[i0:i1, 1] = s[: i1 - i0] * pan
     return out
 
-def ping(t0, gain=0.11):
+def ping(t0, gain=0.045):
     out = np.zeros(N)
-    for f, d in ((1318.5, 0.0), (1760.0, 0.075)):
+    for f, d in ((880.0, 0.0), (1174.7, 0.075)):
         tt = np.clip(T - t0 - d, 0, None)
-        out += np.sin(2 * np.pi * f * tt) * np.exp(-tt * 14) * (T >= t0 + d)
+        out += np.sin(2 * np.pi * f * tt) * np.exp(-tt * 18) * (T >= t0 + d)
     return np.stack([out, out], 1) * gain
 
 def impact(t0):
     tt = np.clip(T - t0, 0, None); on = (T >= t0)
     f = 38 + 70 * np.exp(-tt * 10)
     boom = np.sin(2 * np.pi * np.cumsum(f * on) / SR) * np.exp(-tt * 2.2) * on * 0.55
-    crack = hp(rng.normal(0, 1, N), 3000) * np.exp(-tt * 18) * on * 0.08
+    crack = hp(rng.normal(0, 1, N), 3000) * np.exp(-tt * 18) * on * 0.0   # no crack: keeps the reveal clear for VO
     shimmer = bp(rng.normal(0, 1, N), 7000, 14000) * np.exp(-tt * 1.4) * on * 0.03
     m = boom + crack
     return np.stack([m + shimmer, m + np.roll(shimmer, 900)], 1)
@@ -179,51 +183,33 @@ def store_door_tone():
     v = (np.sin(2 * np.pi * note(38) * T) * 0.05 + np.sin(2 * np.pi * note(45) * T) * 0.03) * g
     return np.stack([v, v], 1)
 
-# ---------------------------------------------------------------- mix
-def load_wav(p):
-    sr, x = wavfile.read(p)
-    x = x.astype(np.float32)
-    if x.dtype != np.float32 or np.abs(x).max() > 1.5: x = x / 32768.0
-    if x.ndim == 1: x = np.stack([x, x], 1)
-    if sr != SR:
-        idx = np.arange(int(len(x) * SR / sr)) * sr / SR
-        x = np.stack([np.interp(idx, np.arange(len(x)), x[:, c]) for c in (0, 1)], 1)
-    return x
+# ---------------------------------------------------------------- stems + reference mix
+AUDIO_DIR = os.path.join(ROOT, 'AUDIO')
+TARGET_PEAK_DB = -6.0        # music+SFX bed peaks at -6 dBFS: headroom for the owner's voice
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--vo', help='single VO wav, placed at VO_CUES[0]')
-    ap.add_argument('--vo-lines', nargs=5, help='five per-line VO wavs, placed on VO_CUES')
-    a = ap.parse_args()
-    os.makedirs(os.path.join(OUT, 'stems'), exist_ok=True)
+    os.makedirs(AUDIO_DIR, exist_ok=True)
     music = pad() + pluck_arp() + kick_pulse() + sub_bass() + reveal_chord()
-    music *= (1 - 0.65 * (ramp(28.3, 28.9) * (1 - ramp(29.3, 29.9))))[:, None]  # breath before the reveal
+    music *= (1 - 0.65 * (ramp(28.3, 28.9) * (1 - ramp(29.3, 29.9))))[:, None]   # breath before the reveal
+    # gentle mid-range scoop (1-3 kHz) so the music never competes with speech intelligibility
+    mid = np.stack([bp(music[:, c], 1000, 3000) for c in (0, 1)], 1)
+    music = music - 0.4 * mid
     sfx = metro_amb() + city_amb() + store_door_tone()
     for k, t0 in CUTS.items():
         if k == 'reveal':
-            sfx += reverse_swell(t0) + impact(t0 + 0.65)
+            sfx += reverse_swell(t0) * 0.6 + impact(t0 + 0.65) * 0.8
         else:
-            sfx += whoosh(t0, 0.8 if k != 'map' else 1.1, gain=0.3)
+            sfx += whoosh(t0, 0.8 if k != 'map' else 1.1, gain=0.16)
     for p in PINGS: sfx += ping(p)
-    vo = np.zeros((N, 2))
-    if a.vo_lines:
-        for p, c in zip(a.vo_lines, VO_CUES):
-            x = load_wav(p); i0 = int(c * SR); i1 = min(N, i0 + len(x)); vo[i0:i1] += x[: i1 - i0]
-    elif a.vo:
-        x = load_wav(a.vo); i0 = int(VO_CUES[0] * SR); i1 = min(N, i0 + len(x)); vo[i0:i1] += x[: i1 - i0]
-    if np.abs(vo).max() > 0:
-        e = np.abs(vo).max(1); e = lp(e, 6); e = e / (e.max() + 1e-9)
-        duck = 1 - 0.55 * np.clip(e * 3, 0, 1)
-        music *= duck[:, None]; sfx *= (1 - 0.3 * np.clip(e * 3, 0, 1))[:, None]
-    fade = np.clip(T / 0.15, 0, 1) * np.clip((DUR - T) / 0.5, 0, 1)
-    mix = (music * 0.9 + sfx + vo * 1.0) * fade[:, None]
-    peak = np.abs(mix).max(); mix = mix / peak * 0.89          # -1 dBFS peak
-    mix = np.tanh(mix * 1.15) / np.tanh(1.15)                  # gentle soft-clip glue
-    for name, x in (('music', music), ('sfx', sfx), ('vo', vo)):
-        pk = np.abs(x).max() or 1
-        wavfile.write(os.path.join(OUT, 'stems', f'{name}.wav'), SR, (x / pk * 0.89 * 32767).astype(np.int16))
-    wavfile.write(os.path.join(OUT, 'puntocom_mix.wav'), SR, (mix * 32767).astype(np.int16))
-    print('mix written', 'with VO' if np.abs(vo).max() > 0 else '(no VO supplied)')
+    fade = (np.clip(T / 0.15, 0, 1) * np.clip((DUR - T) / 0.5, 0, 1))[:, None]
+    music, sfx = music * 0.85 * fade, sfx * fade
+    g = 10 ** (TARGET_PEAK_DB / 20) / np.abs(music + sfx).max()     # ONE shared gain for both stems:
+    music, sfx = music * g, sfx * g                                  # stems at 0 dB in AE == reference mix
+    w = lambda name, x: wavfile.write(os.path.join(AUDIO_DIR, name), SR, (np.clip(x, -1, 1) * 32767).astype(np.int16))
+    w('BACKGROUND_MUSIC.wav', music)
+    w('SOUND_EFFECTS.wav', sfx)
+    w('MUSIC_SFX_REFERENCE_MIX.wav', music + sfx)
+    print('written AUDIO/BACKGROUND_MUSIC.wav, AUDIO/SOUND_EFFECTS.wav, AUDIO/MUSIC_SFX_REFERENCE_MIX.wav (no voiceover generated)')
 
 if __name__ == '__main__':
     main()

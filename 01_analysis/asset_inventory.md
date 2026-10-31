@@ -26,7 +26,8 @@
 |---|---|---|
 | **AI video generation** (image-to-video) | ❌ No engine available in this environment. The connected ElevenLabs connector is the *restricted* one (no image, video or music). No Runway, Kling, Veo, Luma or Sora integration. | Scenes 02–03 are built as an original **procedural 3D "navigation mode" street** (code-rendered) plus the real exit photo. Ready-to-run prompts for each AI clip are in `03_ai_prompts/`. The AE project has placeholder slots for them. |
 | **Adobe After Effects** | ❌ Not installed (Linux cloud container). | A `.aep` cannot be written without AE. `05_aftereffects/scripts/build_puntocom_project.jsx` builds and saves the full editable project in one run. The master MP4 was rendered with the equivalent Python/FFmpeg pipeline (`tools/render_video.py`). |
-| **Italian male voiceover** | ⚠️ ElevenLabs is reachable. The first request returned "free generations busy, nothing charged". | The mix has the VO cue points and ducking ready. Generate the VO, then run `python3 tools/make_audio.py --vo-lines l1.wav … l5.wav` and re-mux. See `07_audio/README.md`. |
+| **Voiceover** | ⏳ **Egyptian Arabic edition: the owner records his own voiceover.** No AI or synthetic speech is generated. | `AUDIO/VOICEOVER_OWNER.wav` slot, AE track and markers are ready. See `AUDIO/README.md`. |
+| **Arabic fonts** | ✅ Cairo and IBM Plex Sans Arabic (OFL) downloaded into `fonts/` | Static Cairo-Bold cut from the variable font for AE. |
 | **Map data** (OSM, Nominatim, OSRM, map tiles) | ❌ Blocked by the network policy. | The GPS map is a labelled schematic. See `route_analysis.md` §3 for the one-step upgrade. |
 | Higher-resolution `IMG_4081` | optional | It is 457 px wide, so it is used as a floating card, not full screen. |
 | Vector logo (SVG/AI) | optional | The raster master extracts cleanly. A vector master would allow larger, sharper reveals. |
